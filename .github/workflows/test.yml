@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (pre-commit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # pyright (run via the pre-commit hook) resolves imports from the venv
+      # named in pyproject.toml [tool.pyright] venv/venvPath, not from the
+      # system Python.  Create .venv so the hook finds ladon and all deps.
+      - name: Create virtual environment for pyright
+        run: python -m venv .venv
+
+      - name: Install Ladon core into .venv (not yet on PyPI as ladon-crawl)
+        run: .venv/bin/pip install git+https://github.com/MoonyFringers/ladon.git
+
+      - name: Install package and all dependencies into .venv
+        run: |
+          .venv/bin/pip install -e ".[dev]" --no-deps
+          .venv/bin/pip install "duckdb>=1.0.0" "pytz>=2023.3"
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit on all files
+        run: pre-commit run --all-files
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Ladon core (not yet on PyPI as ladon-crawl)
+        run: pip install git+https://github.com/MoonyFringers/ladon.git
+
+      - name: Install package and dev dependencies
+        # ladon-crawl is not yet on PyPI — install editable without resolving
+        # ladon-crawl, then add all remaining deps (runtime + dev) explicitly.
+        run: |
+          pip install -e "." --no-deps
+          # Version floors must match [project.dependencies] in pyproject.toml.
+          pip install "duckdb>=1.0.0" "pytz>=2023.3"
+          # Dev extras (pytest, pytest-cov, pre-commit).
+          pip install "pytest>=8.0" pytest-cov pre-commit
+
+      - name: Run tests with coverage
+        run: pytest tests/ -v --cov=ladon_hackernews --cov-report=term-missing

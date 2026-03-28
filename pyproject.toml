@@ -72,8 +72,15 @@ ignore = [
 typeCheckingMode = "strict"
 include = ["src", "tests"]
 extraPaths = ["src"]
+# Point pyright at the project's own .venv so the pre-commit hook uses the
+# correct environment for import resolution rather than its own isolated venv.
+venvPath = "."
+venv = ".venv"
 reportMissingImports = "none"
 reportUntypedFunctionDecorator = "none"
+# duckdb's Python wrapper and pytest 9.x expose partially-typed APIs;
+# suppress Unknown member access globally rather than per call-site.
+reportUnknownMemberType = "none"
 
 # ----------------------------------------
 # PYTEST
