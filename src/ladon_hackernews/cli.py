@@ -93,8 +93,13 @@ def _run(top: int, db_path: str) -> None:
                         rec, _id
                     ),
                 )
-                run.status = "partial" if result.leaves_failed else "done"
-                run.leaves_fetched = result.leaves_fetched
+                run.status = (
+                    "partial"
+                    if result.leaves_failed
+                    or result.leaves_consumed > result.leaves_persisted
+                    else "done"
+                )
+                run.leaves_consumed = result.leaves_consumed
                 run.leaves_persisted = result.leaves_persisted
                 run.leaves_failed = result.leaves_failed
                 run.branch_errors = sum(
