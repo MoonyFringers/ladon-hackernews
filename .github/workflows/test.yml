@@ -31,7 +31,7 @@ jobs:
       - name: Install package and all dependencies into .venv
         run: |
           .venv/bin/pip install -e ".[dev]" --no-deps
-          .venv/bin/pip install "duckdb>=1.0.0" "pytz>=2023.3"
+          .venv/bin/pip install "duckdb>=1.0.0" "pytz>=2023.3" "pytest>=8.0"
 
       - name: Install pre-commit
         run: pip install pre-commit

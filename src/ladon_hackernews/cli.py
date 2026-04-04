@@ -16,11 +16,16 @@ Progress is written to stdout as one line per story::
     Crawling 30 stories → hn.db
     [ 1/30] "Show HN: …"  — 142 comments
     [ 2/30] "Ask HN: …"   — 87 comments  [partial: 3 errors]
+       ↳ some comments were deleted or unavailable (run with --verbose for details)
     [ 3/30] https://news.ycombinator.com/item?id=…  — not ready
     Done — 30 stories · 1,234 comments · 2 not ready · 3 leaf errors
+    Note: leaf errors are deleted or unavailable HN comments — this is normal. Run with --verbose for details.
 
 Pass ``--verbose`` to also see DEBUG-level messages from the Ladon
 framework (leaf-level warnings, HTTP timings, circuit-breaker state).
+In default mode, ``ladon.*`` loggers are silenced at ERROR level; the
+CLI already surfaces leaf-level problems as per-story status tags and
+summary counts.
 """
 
 from __future__ import annotations
@@ -65,7 +70,7 @@ def _story_label(ref: Ref, record: object) -> str:
     return ref.url
 
 
-def _run(top: int, db_path: str) -> None:
+def _run(top: int, db_path: str, verbose: bool = False) -> None:
     """Crawl the top *top* HN stories and write comments to *db_path*.
 
     Opens a ``HNDuckDBRepository`` and an ``HttpClient``, fetches the story
@@ -83,6 +88,11 @@ def _run(top: int, db_path: str) -> None:
 
     A ``TypeError`` raised by an unexpected ref type propagates immediately
     without updating the run record, as it indicates a plugin bug.
+
+    When *verbose* is ``False`` (default), partial stories print an
+    explanatory ``↳`` note and the summary prints a ``Note:`` line when
+    leaf errors are present.  In verbose mode these hints are suppressed
+    because the raw framework log messages already provide full detail.
     """
     plugin = HNPlugin(top=top)
     config = RunConfig()
@@ -177,6 +187,12 @@ def _run(top: int, db_path: str) -> None:
                     f"{prefix} {label}  — {comments} comment"
                     f"{'s' if comments != 1 else ''}{status_tag}"
                 )
+                if run.status == "partial" and not verbose:
+                    print(
+                        " " * (width * 2 + 3)
+                        + "↳ some comments were deleted or unavailable"
+                        " (run with --verbose for details)"
+                    )
 
             except ExpansionNotReadyError:
                 run.status = "not_ready"
@@ -215,6 +231,11 @@ def _run(top: int, db_path: str) -> None:
                 f"{'s' if total_leaf_errors != 1 else ''}"
             )
         print("\nDone — " + " · ".join(parts))
+        if total_leaf_errors and not verbose:
+            print(
+                "Note: leaf errors are deleted or unavailable HN comments"
+                " — this is normal. Run with --verbose for details."
+            )
 
 
 def _validate_top(value: str) -> int:
@@ -272,5 +293,10 @@ def main() -> None:
         level=log_level,
         format="%(asctime)s %(levelname)s %(name)s — %(message)s",
     )
+    if not args.verbose:
+        # Silence ladon.* loggers (leaf unavailable, branch failed, HTTP
+        # timings) in normal mode.  The CLI already surfaces these as
+        # per-story status tags and summary counts.
+        logging.getLogger("ladon").setLevel(logging.ERROR)
 
-    _run(top=args.top, db_path=args.out)
+    _run(top=args.top, db_path=args.out, verbose=args.verbose)
