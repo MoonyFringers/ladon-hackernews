@@ -6,3 +6,6 @@
 *.parquet
 dist/
 build/
+.coverage
+htmlcov/
+.pytest_cache/
