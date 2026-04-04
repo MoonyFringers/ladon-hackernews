@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS ladon_runs (
     started_at       TIMESTAMPTZ NOT NULL,
     finished_at      TIMESTAMPTZ,
     status           TEXT    NOT NULL,
-    leaves_fetched   INTEGER NOT NULL DEFAULT 0,
+    leaves_consumed   INTEGER NOT NULL DEFAULT 0,
     leaves_persisted INTEGER NOT NULL DEFAULT 0,
     leaves_failed    INTEGER NOT NULL DEFAULT 0,
     branch_errors    INTEGER NOT NULL DEFAULT 0,
@@ -71,13 +71,13 @@ ON CONFLICT (id) DO UPDATE SET
 _UPSERT_RUN = """
 INSERT INTO ladon_runs (
     run_id, plugin_name, top_ref, started_at, status,
-    finished_at, leaves_fetched, leaves_persisted,
+    finished_at, leaves_consumed, leaves_persisted,
     leaves_failed, branch_errors, errors
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (run_id) DO UPDATE SET
     status           = excluded.status,
     finished_at      = excluded.finished_at,
-    leaves_fetched   = excluded.leaves_fetched,
+    leaves_consumed   = excluded.leaves_consumed,
     leaves_persisted = excluded.leaves_persisted,
     leaves_failed    = excluded.leaves_failed,
     branch_errors    = excluded.branch_errors,
@@ -86,7 +86,7 @@ ON CONFLICT (run_id) DO UPDATE SET
 
 _LAST_RUN_FILTERED = """
 SELECT run_id, plugin_name, top_ref, started_at, status,
-       finished_at, leaves_fetched, leaves_persisted,
+       finished_at, leaves_consumed, leaves_persisted,
        leaves_failed, branch_errors, errors
 FROM ladon_runs
 WHERE plugin_name = ? AND status = ?
@@ -96,7 +96,7 @@ LIMIT 1
 
 _LAST_RUN_ANY = """
 SELECT run_id, plugin_name, top_ref, started_at, status,
-       finished_at, leaves_fetched, leaves_persisted,
+       finished_at, leaves_consumed, leaves_persisted,
        leaves_failed, branch_errors, errors
 FROM ladon_runs
 WHERE plugin_name = ?
@@ -117,7 +117,7 @@ def _row_to_run_record(row: tuple[Any, ...]) -> RunRecord:
             str(row[4]),
         ),
         finished_at=row[5],  # None for in-progress runs
-        leaves_fetched=int(row[6]),
+        leaves_consumed=int(row[6]),
         leaves_persisted=int(row[7]),
         leaves_failed=int(row[8]),
         branch_errors=int(row[9]),
@@ -173,7 +173,7 @@ class HNDuckDBRepository:
                 run.started_at,
                 run.status,
                 run.finished_at,
-                run.leaves_fetched,
+                run.leaves_consumed,
                 run.leaves_persisted,
                 run.leaves_failed,
                 run.branch_errors,

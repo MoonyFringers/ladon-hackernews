@@ -50,7 +50,7 @@ def _make_run(
         started_at=_NOW,
         status=status,
         finished_at=finished_at,
-        leaves_fetched=10,
+        leaves_consumed=10,
         leaves_persisted=10,
         leaves_failed=0,
         branch_errors=0,
