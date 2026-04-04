@@ -13,7 +13,7 @@ from ladon.plugins.errors import ExpansionNotReadyError
 from ladon.plugins.models import Ref
 from ladon.runner import RunResult
 
-from ladon_hackernews.cli import (  # pyright: ignore[reportPrivateUsage]
+from ladon_hackernews.cli import (
     _build_parser,
     _run,
     _story_label,
@@ -237,11 +237,12 @@ class TestRunOutput:
         assert "[2/2]" in out
         assert '"Show HN: a test story"' in out
         assert "3 comments" in out
-        # Clean run: no error buckets in summary.
+        # Clean run: no error buckets in summary, no inline note.
         assert "Done — 2 stories · 6 comments" in out
         assert "leaf error" not in out
         assert "not ready" not in out
         assert "failed" not in out
+        assert "↳" not in out
 
     def test_partial_story_shows_status_tag_and_leaf_errors(
         self,
@@ -266,6 +267,7 @@ class TestRunOutput:
 
         out = capsys.readouterr().out
         assert "[partial: 2 errors]" in out
+        assert "↳ some comments were deleted or unavailable" in out
         assert "2 leaf errors" in out
 
     def test_not_ready_story_prints_url_and_increments_counter(
@@ -358,8 +360,9 @@ class TestRunOutput:
 
         out = capsys.readouterr().out
         assert "[partial: 1 error]" in out
+        assert "↳ some comments were deleted or unavailable" in out
         assert "1 leaf error" in out
-        assert "leaf errors" not in out
+        assert "1 leaf errors" not in out  # summary must use singular
 
     def test_single_story_uses_singular_form_in_header_and_summary(
         self,
@@ -413,6 +416,66 @@ class TestRunOutput:
         assert "Done — 0 stories · 0 comments" in out
         mock_run_crawl.assert_not_called()
 
+    def test_leaf_errors_print_explanatory_note(
+        self,
+        mock_plugin_cls: MagicMock,
+        mock_repo_cls: MagicMock,
+        mock_client_cls: MagicMock,
+        mock_run_crawl: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        self._setup(mock_plugin_cls, mock_repo_cls, mock_client_cls, [_REF_1])
+        mock_run_crawl.return_value = _make_result(
+            consumed=1,
+            persisted=1,
+            failed=1,
+            errors=("ref[0] consume failed: gone",),
+        )
+
+        _run(top=1, db_path="out.db")
+
+        out = capsys.readouterr().out
+        assert "Note: leaf errors are deleted or unavailable HN comments" in out
+        assert "--verbose" in out
+
+    def test_verbose_mode_suppresses_inline_and_summary_notes(
+        self,
+        mock_plugin_cls: MagicMock,
+        mock_repo_cls: MagicMock,
+        mock_client_cls: MagicMock,
+        mock_run_crawl: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        self._setup(mock_plugin_cls, mock_repo_cls, mock_client_cls, [_REF_1])
+        mock_run_crawl.return_value = _make_result(
+            consumed=1,
+            persisted=1,
+            failed=1,
+            errors=("ref[0] consume failed: gone",),
+        )
+
+        _run(top=1, db_path="out.db", verbose=True)
+
+        out = capsys.readouterr().out
+        assert "↳" not in out
+        assert "Note:" not in out
+
+    def test_clean_run_omits_explanatory_note(
+        self,
+        mock_plugin_cls: MagicMock,
+        mock_repo_cls: MagicMock,
+        mock_client_cls: MagicMock,
+        mock_run_crawl: MagicMock,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        self._setup(mock_plugin_cls, mock_repo_cls, mock_client_cls, [_REF_1])
+        mock_run_crawl.return_value = _make_result(consumed=3, persisted=3)
+
+        _run(top=1, db_path="out.db")
+
+        out = capsys.readouterr().out
+        assert "Note:" not in out
+
     def test_invalid_ref_type_raises_type_error(
         self,
         mock_plugin_cls: MagicMock,
@@ -444,7 +507,7 @@ class TestMain:
     ) -> None:
         with patch.object(sys, "argv", ["ladon-hackernews"]):
             main()
-        mock_run.assert_called_once_with(top=30, db_path="hn.db")
+        mock_run.assert_called_once_with(top=30, db_path="hn.db", verbose=False)
 
     @patch("ladon_hackernews.cli._run")
     def test_explicit_args_forwarded_to_run(self, mock_run: MagicMock) -> None:
@@ -452,7 +515,7 @@ class TestMain:
             sys, "argv", ["ladon-hackernews", "--top", "5", "--out", "x.db"]
         ):
             main()
-        mock_run.assert_called_once_with(top=5, db_path="x.db")
+        mock_run.assert_called_once_with(top=5, db_path="x.db", verbose=False)
 
     @patch("ladon_hackernews.cli._run")
     @patch("logging.basicConfig")
@@ -465,6 +528,12 @@ class TestMain:
         assert mock_basicconfig.call_args.kwargs["level"] == logging.WARNING
 
     @patch("ladon_hackernews.cli._run")
+    def test_verbose_flag_forwarded_to_run(self, mock_run: MagicMock) -> None:
+        with patch.object(sys, "argv", ["ladon-hackernews", "--verbose"]):
+            main()
+        mock_run.assert_called_once_with(top=30, db_path="hn.db", verbose=True)
+
+    @patch("ladon_hackernews.cli._run")
     @patch("logging.basicConfig")
     def test_verbose_flag_sets_debug_level(
         self, mock_basicconfig: MagicMock, mock_run: MagicMock
@@ -473,3 +542,23 @@ class TestMain:
             main()
         mock_basicconfig.assert_called_once()
         assert mock_basicconfig.call_args.kwargs["level"] == logging.DEBUG
+
+    @patch("ladon_hackernews.cli._run")
+    @patch("logging.basicConfig")
+    def test_default_mode_silences_ladon_logger(
+        self, mock_basicconfig: MagicMock, mock_run: MagicMock
+    ) -> None:
+        with patch.object(sys, "argv", ["ladon-hackernews"]):
+            main()
+        assert logging.getLogger("ladon").level == logging.ERROR
+
+    @patch("ladon_hackernews.cli._run")
+    @patch("logging.basicConfig")
+    def test_verbose_mode_does_not_silence_ladon_logger(
+        self, mock_basicconfig: MagicMock, mock_run: MagicMock
+    ) -> None:
+        # Reset to NOTSET so we can confirm --verbose leaves it untouched.
+        logging.getLogger("ladon").setLevel(logging.NOTSET)
+        with patch.object(sys, "argv", ["ladon-hackernews", "--verbose"]):
+            main()
+        assert logging.getLogger("ladon").level == logging.NOTSET

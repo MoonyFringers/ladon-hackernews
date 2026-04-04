@@ -81,6 +81,9 @@ reportUntypedFunctionDecorator = "none"
 # duckdb's Python wrapper and pytest 9.x expose partially-typed APIs;
 # suppress Unknown member access globally rather than per call-site.
 reportUnknownMemberType = "none"
+# Tests intentionally import private helpers (_run, _story_label, etc.)
+# to exercise them directly; suppress the warning project-wide.
+reportPrivateUsage = "none"
 
 # ----------------------------------------
 # PYTEST
