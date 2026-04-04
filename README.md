@@ -84,7 +84,34 @@ a useful corpus for instruction tuning and dialogue modelling.
 
 ## How it works
 
-This adapter implements the Ladon [SES (Source / Expander / Sink)](https://github.com/MoonyFringers/ladon/blob/main/docs/decisions/adr-004-ses-protocol-design.md) protocol against the [HN Firebase API](https://github.com/HackerNews/API):
+This adapter implements the Ladon [SES (Source / Expander / Sink)](https://github.com/MoonyFringers/ladon/blob/main/docs/decisions/adr-004-ses-protocol-design.md) protocol against the [HN Firebase API](https://github.com/HackerNews/API).
+
+### Pipeline
+
+```mermaid
+flowchart TB
+    subgraph plugin ["SES Plugin"]
+        direction LR
+        SRC["HNSource\ndiscover()"] -- "Ref × N" --> EXP["HNExpander\nexpand()"] -- "StoryRecord\nRef × M" --> SNK["HNSink\nconsume()"]
+    end
+    subgraph persistence ["Persistence"]
+        direction LR
+        REPO["HNDuckDBRepository"] --> DB[("hn.db")] -- "export_parquet()" --> PQ[("hn.parquet")]
+    end
+    SNK -- "CommentRecord" --> REPO
+```
+
+### Domain records
+
+```mermaid
+flowchart LR
+    SR["StoryRecord\n─────────────\nid · title · url\nby · score · time\ndescendants · comment_ids"]
+    CR["CommentRecord\n─────────────\nid · story_id · parent_id\nby · text · time"]
+
+    SR -- "expands into" --> CR
+```
+
+### SES class map
 
 | Layer | Class | HN API call |
 |---|---|---|
