@@ -4,7 +4,33 @@ version = "0.0.1"
 description = "Hacker News adapter for the Ladon crawler framework."
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+authors = [
+    {name = "Alessio Pascucci", email = "feeder81@gmail.com"},
+]
+keywords = [
+    "web-crawler",
+    "crawler",
+    "hackernews",
+    "hacker-news",
+    "ladon",
+    "ladon-adapter",
+    "duckdb",
+    "data-pipeline",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 
 dependencies = [
     # ladon-crawl is the PyPI name for the Ladon core framework.
@@ -26,9 +52,11 @@ dev = [
 ladon-hackernews = "ladon_hackernews.cli:main"
 
 [project.urls]
+Homepage = "https://github.com/MoonyFringers/ladon-hackernews"
 Repository = "https://github.com/MoonyFringers/ladon-hackernews"
-Framework  = "https://github.com/MoonyFringers/ladon"
-Issues     = "https://github.com/MoonyFringers/ladon-hackernews/issues"
+Framework = "https://github.com/MoonyFringers/ladon"
+Issues = "https://github.com/MoonyFringers/ladon-hackernews/issues"
+Documentation = "https://moonyfringers.github.io/ladon"
 
 [build-system]
 requires = ["setuptools>=65", "wheel"]
