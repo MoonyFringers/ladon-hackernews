@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/MoonyFringers/ladon-hackernews/actions/workflows/test.yml/badge.svg)](https://github.com/MoonyFringers/ladon-hackernews/actions/workflows/test.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 
 Hacker News adapter for the [Ladon](https://github.com/MoonyFringers/ladon) crawler framework.
 
@@ -17,6 +18,8 @@ pip install git+https://github.com/MoonyFringers/ladon.git
 pip install git+https://github.com/MoonyFringers/ladon-hackernews.git
 ladon-hackernews --top 30 --out hn.db
 ```
+
+> **Once on PyPI (v0.0.1):** `pip install ladon-crawl ladon-hackernews`
 
 No authentication. No external server.
 
@@ -46,7 +49,7 @@ Each run writes two tables to `hn.db`:
 | `started_at` | TIMESTAMPTZ | When the run started (UTC) |
 | `finished_at` | TIMESTAMPTZ | When the run finished; NULL while running |
 | `status` | TEXT | `done`, `partial`, `not_ready`, `failed`, or `running` |
-| `leaves_fetched` | INTEGER | Comments for which `sink.consume()` succeeded |
+| `leaves_consumed` | INTEGER | Comments for which `sink.consume()` succeeded |
 | `leaves_persisted` | INTEGER | Comments successfully written to `hn_comments` |
 | `leaves_failed` | INTEGER | Comments that failed to fetch or persist |
 | `branch_errors` | INTEGER | Expander-level errors (branch could not be expanded) |
@@ -63,6 +66,15 @@ ORDER BY comments DESC
 LIMIT 10;
 ```
 
+HN comments are structured, human-authored, and high signal-to-noise — a useful
+corpus for instruction tuning and dialogue modelling. A typical pipeline looks like:
+
+```
+ladon-hackernews --top 500 --out hn.db
+    → export_parquet("hn.db", "hn.parquet")
+        → training pipeline
+```
+
 ## Export to Parquet
 
 ```python
@@ -71,16 +83,92 @@ from ladon_hackernews import export_parquet
 export_parquet("hn.db", "hn.parquet")
 ```
 
-## LLM training pipeline
+## CLI reference
 
 ```
-ladon-hackernews --top 500 --out hn.db
-    → export_parquet("hn.db", "hn.parquet")
-        → training pipeline
+ladon-hackernews [--top N] [--out PATH] [--verbose]
 ```
 
-HN comments are structured, human-authored, and high signal-to-noise —
-a useful corpus for instruction tuning and dialogue modelling.
+| flag | default | description |
+|---|---|---|
+| `--top N` | `30` | Number of top stories to crawl (range: 1–500) |
+| `--out PATH` | `hn.db` | Output DuckDB database path |
+| `--verbose`, `-v` | off | Show DEBUG-level framework messages (leaf warnings, HTTP timings) |
+
+In default mode the terminal shows one progress line per story and a summary at
+the end. Framework-level noise (`leaf unavailable`, `expander branch failed`) is
+suppressed; partial stories print a `↳` hint instead. Pass `--verbose` to expose
+the raw framework log messages.
+
+---
+
+## Use as a library
+
+The CLI is the simplest way to run a crawl, but `HNPlugin` and
+`HNDuckDBRepository` can be used directly as a library — useful when you need
+custom scheduling, batching, or integration into a larger pipeline.
+
+```python
+import uuid
+from datetime import datetime, timezone
+
+from ladon.networking.client import HttpClient
+from ladon.networking.config import HttpClientConfig
+from ladon.persistence import RunAudit, RunRecord
+from ladon.plugins.errors import ExpansionNotReadyError
+from ladon.plugins.models import Ref
+from ladon.runner import RunConfig, run_crawl
+from ladon_hackernews import HNPlugin, HNDuckDBRepository
+
+plugin = HNPlugin(top=10)
+config = RunConfig()
+client_config = HttpClientConfig(user_agent="my-bot/1.0")
+
+with HNDuckDBRepository("hn.db") as repo, HttpClient(client_config) as client:
+    for story_ref in plugin.source.discover(client):
+        if not isinstance(story_ref, Ref):
+            raise TypeError(f"unexpected type {type(story_ref).__name__}")
+        run_id = str(uuid.uuid4())
+        run = RunRecord(
+            run_id=run_id,
+            plugin_name=plugin.name,
+            top_ref=story_ref.url,
+            started_at=datetime.now(tz=timezone.utc),
+            status="running",
+        )
+        if isinstance(repo, RunAudit):
+            repo.record_run(run)
+
+        try:
+            result = run_crawl(
+                story_ref, plugin, client, config,
+                # Default-argument capture binds run_id to each lambda.
+                on_leaf=lambda rec, _, _id=run_id: repo.write_leaf(rec, _id),
+            )
+            run.branch_errors = sum(
+                1 for e in result.errors if e.startswith("expander branch")
+            )
+            run.status = (
+                "partial"
+                if result.leaves_failed
+                or result.leaves_consumed > result.leaves_persisted
+                or run.branch_errors
+                else "done"
+            )
+            run.leaves_consumed = result.leaves_consumed
+            run.leaves_persisted = result.leaves_persisted
+            run.leaves_failed = result.leaves_failed
+            run.errors = result.errors
+        except ExpansionNotReadyError:
+            run.status = "not_ready"
+        except Exception as exc:
+            run.status = "failed"
+            run.errors = (str(exc),)
+        finally:
+            run.finished_at = datetime.now(tz=timezone.utc)
+            if isinstance(repo, RunAudit):
+                repo.record_run(run)
+```
 
 ## How it works
 
@@ -130,68 +218,10 @@ the last successful crawl:
 last = repo.get_last_run("hackernews")  # most recent "done" run
 ```
 
-## Use as a library
-
-```python
-import uuid
-from datetime import datetime, timezone
-
-from ladon.networking.client import HttpClient
-from ladon.networking.config import HttpClientConfig
-from ladon.persistence import RunAudit, RunRecord
-from ladon.plugins.errors import ExpansionNotReadyError
-from ladon.plugins.models import Ref
-from ladon.runner import RunConfig, run_crawl
-from ladon_hackernews import HNPlugin, HNDuckDBRepository
-
-plugin = HNPlugin(top=10)
-config = RunConfig()
-client_config = HttpClientConfig(user_agent="my-bot/1.0")
-
-with HNDuckDBRepository("hn.db") as repo, HttpClient(client_config) as client:
-    for story_ref in plugin.source.discover(client):
-        if not isinstance(story_ref, Ref):
-            raise TypeError(f"unexpected type {type(story_ref).__name__}")
-        run_id = str(uuid.uuid4())
-        run = RunRecord(
-            run_id=run_id,
-            plugin_name=plugin.name,
-            top_ref=story_ref.url,
-            started_at=datetime.now(tz=timezone.utc),
-            status="running",
-        )
-        if isinstance(repo, RunAudit):
-            repo.record_run(run)
-
-        try:
-            result = run_crawl(
-                story_ref, plugin, client, config,
-                # Default-argument capture binds run_id to each lambda.
-                on_leaf=lambda rec, _, _id=run_id: repo.write_leaf(rec, _id),
-            )
-            run.status = "partial" if result.leaves_failed else "done"
-            run.leaves_fetched = result.leaves_fetched
-            run.leaves_persisted = result.leaves_persisted
-            run.leaves_failed = result.leaves_failed
-            run.branch_errors = sum(
-                1 for e in result.errors if e.startswith("expander branch")
-            )
-            run.errors = result.errors
-        except ExpansionNotReadyError:
-            run.status = "not_ready"
-        except Exception as exc:
-            run.status = "failed"
-            run.errors = (str(exc),)
-        finally:
-            run.finished_at = datetime.now(tz=timezone.utc)
-            if isinstance(repo, RunAudit):
-                repo.record_run(run)
-```
-
 ## Writing your own adapter
 
 `ladon-hackernews` is the canonical reference for building a Ladon adapter.
-See the [Ladon documentation](https://github.com/MoonyFringers/ladon) and
+See the [Ladon documentation](https://moonyfringers.github.io/ladon/) and
 [ADR-003](https://github.com/MoonyFringers/ladon/blob/main/docs/decisions/adr-003-plugin-adapter-interface.md)
 for the full adapter authoring guide.
 
@@ -226,6 +256,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
 Apache-2.0 — see [LICENSE](LICENSE).
 
 The [Ladon](https://github.com/MoonyFringers/ladon) core framework is
-AGPL-3.0-or-later. `ladon-hackernews` is Apache-2.0 but has a runtime
+AGPL-3.0-only. `ladon-hackernews` is Apache-2.0 but has a runtime
 dependency on Ladon core; review the AGPL terms if you plan to distribute
 or run this as a network service.
