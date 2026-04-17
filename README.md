@@ -13,13 +13,9 @@ LLM training pipelines or downstream analysis.
 ## Quick start
 
 ```bash
-# Install Ladon core (until ladon-crawl lands on PyPI, install from source)
-pip install git+https://github.com/MoonyFringers/ladon.git
-pip install git+https://github.com/MoonyFringers/ladon-hackernews.git
+pip install ladon-hackernews
 ladon-hackernews --top 30 --out hn.db
 ```
-
-> **Once on PyPI (v0.0.1):** `pip install ladon-crawl ladon-hackernews`
 
 No authentication. No external server.
 
@@ -234,17 +230,7 @@ to be imported for `RunAudit` implementations.
 ```bash
 git clone https://github.com/MoonyFringers/ladon-hackernews
 cd ladon-hackernews
-
-# Install Ladon core (not yet on PyPI as ladon-crawl — use git source)
-pip install git+https://github.com/MoonyFringers/ladon.git
-
-# Install this package and dev dependencies.
-# ladon-crawl is not yet on PyPI, so skip automatic dep resolution and
-# install the remaining non-ladon deps explicitly.
-pip install -e ".[dev]" --no-deps
-# Version floors below must match [project.dependencies] in pyproject.toml.
-pip install "duckdb>=1.0.0" "pytz>=2023.3"
-
+pip install -e ".[dev]"
 pre-commit install
 pytest tests/ -v
 ```
