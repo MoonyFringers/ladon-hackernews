@@ -33,9 +33,6 @@ classifiers = [
 ]
 
 dependencies = [
-    # ladon-crawl is the PyPI name for the Ladon core framework.
-    # Until it is published, install from source:
-    #   pip install git+https://github.com/MoonyFringers/ladon.git
     "ladon-crawl>=0.0.1",
     "duckdb>=1.0.0",
     "pytz>=2023.3",  # required by DuckDB for TIMESTAMPTZ handling
