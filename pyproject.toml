@@ -1,6 +1,6 @@
 [project]
 name = "ladon-hackernews"
-version = "0.0.1"
+version = "0.1.0"
 description = "Hacker News adapter for the Ladon crawler framework."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,7 +33,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "ladon-crawl>=0.0.1",
+    "ladon-crawl>=0.1.0",
     "duckdb>=1.0.0",
     "pytz>=2023.3",  # required by DuckDB for TIMESTAMPTZ handling
 ]
