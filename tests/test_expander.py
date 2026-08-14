@@ -102,4 +102,7 @@ class TestHNExpander:
 
     def test_expand_raises_on_non_ref_input(self) -> None:
         with pytest.raises(TypeError, match="expected Ref"):
-            HNExpander().expand("not-a-ref", MagicMock())
+            HNExpander().expand(
+                "not-a-ref",  # pyright: ignore[reportArgumentType]
+                MagicMock(),
+            )

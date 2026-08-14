@@ -121,7 +121,9 @@ def _run(top: int, db_path: str, verbose: bool = False) -> None:
         total_failed = 0
 
         for i, story_ref in enumerate(stories, 1):
-            if not isinstance(story_ref, Ref):
+            if not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+                story_ref, Ref
+            ):
                 raise TypeError(
                     f"source returned unexpected type "
                     f"{type(story_ref).__name__}"
