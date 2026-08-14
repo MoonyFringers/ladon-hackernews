@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
-from ladon.networking.client import HttpClient
+from ladon.networking.protocols import SyncHttpClientProtocol
 from ladon.plugins.errors import (
     ChildListUnavailableError,
     ExpansionNotReadyError,
@@ -28,8 +29,14 @@ class HNExpander:
     lookup.
     """
 
-    def expand(self, ref: object, client: HttpClient) -> Expansion:
-        if not isinstance(ref, Ref):
+    def expand(
+        self,
+        ref: Ref[Mapping[str, object]],
+        client: SyncHttpClientProtocol,
+    ) -> Expansion[StoryRecord, dict[str, int]]:
+        if not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+            ref, Ref
+        ):
             raise TypeError(f"expected Ref, got {type(ref).__name__}")
         result = client.get(ref.url)
         if not result.ok or result.value is None:

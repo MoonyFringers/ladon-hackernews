@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
-from ladon.networking.client import HttpClient
+from ladon.networking.protocols import SyncHttpClientProtocol
 from ladon.plugins.errors import ChildListUnavailableError
 from ladon.plugins.models import Ref
 
@@ -25,7 +25,9 @@ class HNSource:
     def __init__(self, top: int = 30) -> None:
         self._top = top
 
-    def discover(self, client: HttpClient) -> Sequence[object]:
+    def discover(
+        self, client: SyncHttpClientProtocol
+    ) -> Sequence[Ref[Mapping[str, object]]]:
         """Fetch the HN top-stories list and return refs for the first ``top``."""
         result = client.get(TOP_STORIES_URL)
         if not result.ok or result.value is None:

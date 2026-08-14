@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timezone
 
-from ladon.networking.client import HttpClient
+from ladon.networking.protocols import SyncHttpClientProtocol
 from ladon.plugins.errors import LeafUnavailableError
 from ladon.plugins.models import Ref
 
@@ -23,15 +24,31 @@ class HNSink:
     is read from ``ref.raw["story_id"]`` injected by ``HNExpander``.
     """
 
-    def consume(self, ref: object, client: HttpClient) -> CommentRecord:
-        if not isinstance(ref, Ref):
+    def consume(
+        self, ref: Ref[dict[str, int]], client: SyncHttpClientProtocol
+    ) -> CommentRecord:
+        if not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+            ref, Ref
+        ):
             raise TypeError(f"expected Ref, got {type(ref).__name__}")
-        if not ref.raw or "story_id" not in ref.raw:
+        raw = ref.raw
+        if (
+            not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+                raw, Mapping
+            )
+            or "story_id" not in raw
+        ):
             raise LeafUnavailableError(
                 f"ref.raw missing story_id for {ref.url} — "
                 "was this ref created by HNExpander?"
             )
-        story_id = int(ref.raw["story_id"])  # type: ignore[arg-type]
+        story_id = raw["story_id"]
+        if not isinstance(  # pyright: ignore[reportUnnecessaryIsInstance]
+            story_id, int
+        ):
+            raise LeafUnavailableError(
+                f"ref.raw story_id must be an int for {ref.url}"
+            )
 
         result = client.get(ref.url)
         if not result.ok or result.value is None:

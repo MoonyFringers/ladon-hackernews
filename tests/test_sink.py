@@ -27,7 +27,7 @@ _COMMENT_JSON: dict[str, object] = {
 }
 
 
-def _ref(raw: dict[str, object] | None = None) -> Ref:
+def _ref(raw: dict[str, int] | None = None) -> Ref[dict[str, int]]:
     return Ref(url=_COMMENT_URL, raw=raw or {"story_id": _STORY_ID})
 
 
@@ -86,7 +86,10 @@ class TestHNSink:
     def test_consume_raises_when_ref_raw_is_none(self) -> None:
         ref = Ref(url=_COMMENT_URL, raw=None)  # type: ignore[arg-type]
         with pytest.raises(LeafUnavailableError, match="story_id"):
-            HNSink().consume(ref, _client())
+            HNSink().consume(
+                ref,  # pyright: ignore[reportArgumentType]
+                _client(),
+            )
 
     def test_consume_raises_when_ref_raw_missing_story_id(self) -> None:
         ref = Ref(url=_COMMENT_URL, raw={"other_key": 99})
@@ -95,4 +98,15 @@ class TestHNSink:
 
     def test_consume_raises_on_non_ref_input(self) -> None:
         with pytest.raises(TypeError, match="expected Ref"):
-            HNSink().consume("not-a-ref", MagicMock())
+            HNSink().consume(
+                "not-a-ref",  # pyright: ignore[reportArgumentType]
+                MagicMock(),
+            )
+
+    def test_consume_rejects_non_integer_story_id(self) -> None:
+        ref = Ref(url=_COMMENT_URL, raw={"story_id": "not-an-int"})
+        with pytest.raises(LeafUnavailableError, match="must be an int"):
+            HNSink().consume(
+                ref,  # pyright: ignore[reportArgumentType]
+                _client(),
+            )

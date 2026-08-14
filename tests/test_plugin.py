@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, get_type_hints
+
+from ladon.plugins.models import Ref
+from ladon.plugins.protocol import CrawlPlugin
 
 from ladon_hackernews.expander import HNExpander
 from ladon_hackernews.plugin import HNPlugin
+from ladon_hackernews.records import CommentRecord
 from ladon_hackernews.sink import HNSink
 from ladon_hackernews.source import HNSource
 
+if TYPE_CHECKING:
+    _plugin: CrawlPlugin[
+        Ref[Mapping[str, object]], Ref[dict[str, int]], CommentRecord
+    ] = HNPlugin()
+
 
 class TestHNPlugin:
+    def test_adapter_methods_expose_precise_ref_types(self) -> None:
+        assert (
+            get_type_hints(HNExpander.expand)["ref"]
+            == Ref[Mapping[str, object]]
+        )
+        assert get_type_hints(HNSink.consume)["ref"] == Ref[dict[str, int]]
+
     def test_name_is_hackernews(self) -> None:
         assert HNPlugin().name == "hackernews"
 
